@@ -18,28 +18,33 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script_stop: true
+          envs: OPENAI_API_KEY,TELEGRAM_API_ID,TELEGRAM_API_HASH
           script: |
-            # Go to home directory
             cd ~
-
-            # Clone repository if it doesn't exist, otherwise pull latest changes
             if [ ! -d telegram_classifier ]; then
               git clone ${{ github.server_url }}/${{ github.repository }}.git telegram_classifier
             fi
-
-            # Enter project directory and update
             cd telegram_classifier
             git pull origin main
-
-            # Create .env file from secret
-            echo "${{ secrets.ENV_FILE }}" > .env
-
-            # Build and start the containers
+            
+            # Create .env file with proper values
+            cat > .env << EOL
+            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+            TELEGRAM_API_ID=${{ secrets.TELEGRAM_API_ID }}
+            TELEGRAM_API_HASH=${{ secrets.TELEGRAM_API_HASH }}
+            EOL
+            
+            
+            # Export environment variables for docker-compose
+            export OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+            export TELEGRAM_API_ID=${{ secrets.TELEGRAM_API_ID }}
+            export TELEGRAM_API_HASH=${{ secrets.TELEGRAM_API_HASH }}
+            
             docker-compose down
             docker-compose build --no-cache
             docker-compose up -d
-
-            # Cleanup unused Docker images and containers
+            
             docker image prune -f
             docker container prune -f
 
