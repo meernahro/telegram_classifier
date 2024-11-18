@@ -1,0 +1,8 @@
+.env
+__pycache__/
+*.pyc
+telegram_session
+telegram_session.session
+venv/
+logs/
+*.log
