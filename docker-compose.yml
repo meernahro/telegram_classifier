@@ -9,9 +9,15 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - TELEGRAM_API_ID=${TELEGRAM_API_ID}
       - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
-      - TELEGRAM_PHONE=${TELEGRAM_PHONE}
     volumes:
-      - .:/app
-      - ./telegram_session:/app/telegram_session
+      - telegram_session:/app/data/telegram_session
+      - db_data:/app/data/db
     stdin_open: true
     tty: true
+    restart: unless-stopped
+
+volumes:
+  telegram_session:
+    name: telegram_classifier_session
+  db_data:
+    name: telegram_classifier_db

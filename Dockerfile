@@ -2,11 +2,16 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# Install system dependencies
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 COPY . .
+
+# Create directories for persistent data
+RUN mkdir -p /app/data/telegram_session /app/data/db
 
 # Expose port 8082
 EXPOSE 8082

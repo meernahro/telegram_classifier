@@ -33,7 +33,7 @@ class TelegramListener:
         self.setup_logging()
         self.api_id = os.getenv('TELEGRAM_API_ID')
         self.api_hash = os.getenv('TELEGRAM_API_HASH')
-        self.session_name = 'telegram_session'
+        self.session_name = 'data/telegram_session/telegram_session'
         self.client = None
         self.openai_client = OpenAIClient(os.getenv('OPENAI_API_KEY'))
         self.is_running = False
