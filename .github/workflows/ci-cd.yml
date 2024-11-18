@@ -1,0 +1,44 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Deploy to production
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            # Go to home directory
+            cd ~
+
+            # Clone repository if it doesn't exist, otherwise pull latest changes
+            if [ ! -d telegram_classifier ]; then
+              git clone ${{ github.server_url }}/${{ github.repository }}.git telegram_classifier
+            fi
+
+            # Enter project directory and update
+            cd telegram_classifier
+            git pull origin main
+
+            # Create .env file from secret
+            echo "${{ secrets.ENV_FILE }}" > .env
+
+            # Build and start the containers
+            docker-compose down
+            docker-compose build --no-cache
+            docker-compose up -d
+
+            # Cleanup unused Docker images and containers
+            docker image prune -f
+            docker container prune -f

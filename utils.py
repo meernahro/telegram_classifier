@@ -1,5 +1,6 @@
-from database import SessionLocal
 import models
+from database import SessionLocal
+
 
 def is_message_related_to_exchanges(message: str) -> bool:
     db = SessionLocal()
