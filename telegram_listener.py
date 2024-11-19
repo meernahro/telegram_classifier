@@ -113,9 +113,21 @@ class TelegramListener:
             # Get monitored channel usernames from database
             db = SessionLocal()
             channels = crud.get_all_channels(db)
-            monitored_channels = [
-                ch.name for ch in channels
-            ]  # Channel usernames like 'BWEnews'
+            
+            # Get all dialogs (conversations) from Telegram
+            dialogs = await self.client.get_dialogs()
+            
+            # Create a mapping of lowercase channel names to their actual names
+            channel_map = {dialog.entity.username.lower(): dialog.entity.username 
+                          for dialog in dialogs 
+                          if hasattr(dialog.entity, 'username') and dialog.entity.username}
+            
+            # Match database channel names with actual Telegram channel names
+            monitored_channels = []
+            for ch in channels:
+                if ch.name.lower() in channel_map:
+                    monitored_channels.append(channel_map[ch.name.lower()])
+            
             db.close()
 
             self.log_message(f"📋 Monitoring channels: {monitored_channels}", "info")
