@@ -110,41 +110,8 @@ class TelegramListener:
             if not await self.handle_authentication():
                 raise Exception("Authentication failed")
 
-            # Get monitored channel usernames from database
-            db = SessionLocal()
-            channels = crud.get_all_channels(db)
-            
-            # Get all dialogs (conversations) from Telegram
-            dialogs = await self.client.get_dialogs()
-            
-            # Create a mapping of lowercase channel names to their actual names
-            channel_map = {dialog.entity.username.lower(): dialog.entity.username 
-                          for dialog in dialogs 
-                          if hasattr(dialog.entity, 'username') and dialog.entity.username}
-            
-            # Match database channel names with actual Telegram channel names
-            monitored_channels = []
-            for ch in channels:
-                if ch.name.lower() in channel_map:
-                    monitored_channels.append(channel_map[ch.name.lower()])
-            
-            db.close()
-
-            self.log_message(f"📋 Monitoring channels: {monitored_channels}", "info")
+            await self.update_monitored_channels()
             self.is_running = True
-
-            @self.client.on(events.NewMessage(chats=monitored_channels))
-            async def handler(event):
-                db = SessionLocal()
-                try:
-                    chat = await event.get_chat()
-                    username = chat.username if hasattr(chat, "username") else None
-
-                    if username:  # Only process if we can get the username
-                        self.log_message(f"📨 New message from @{username}", "info")
-                        await self.process_message(event, db)
-                finally:
-                    db.close()
 
             self.log_message("🚀 Telegram listener started successfully", "info")
             await self.client.run_until_disconnected()
@@ -211,3 +178,53 @@ class TelegramListener:
                     "traceback": traceback.format_exc(),
                 },
             )
+
+    async def update_monitored_channels(self):
+        """Update the list of monitored channels"""
+        try:
+            # Get monitored channel usernames from database
+            db = SessionLocal()
+            channels = crud.get_all_channels(db)
+            
+            # Get all dialogs (conversations) from Telegram
+            dialogs = await self.client.get_dialogs()
+            
+            # Create a mapping of lowercase channel names to their actual names
+            channel_map = {dialog.entity.username.lower(): dialog.entity.username 
+                          for dialog in dialogs 
+                          if hasattr(dialog.entity, 'username') and dialog.entity.username}
+            
+            # Match database channel names with actual Telegram channel names
+            monitored_channels = []
+            for ch in channels:
+                if ch.name.lower() in channel_map:
+                    monitored_channels.append(channel_map[ch.name.lower()])
+            
+            db.close()
+
+            # Remove existing handler if it exists
+            if hasattr(self, '_handler'):
+                self.client.remove_event_handler(self._handler)
+
+            # Set up new handler with updated channels
+            @self.client.on(events.NewMessage(chats=monitored_channels))
+            async def handler(event):
+                db = SessionLocal()
+                try:
+                    chat = await event.get_chat()
+                    username = chat.username if hasattr(chat, "username") else None
+
+                    if username:  # Only process if we can get the username
+                        self.log_message(f"📨 New message from @{username}", "info")
+                        await self.process_message(event, db)
+                finally:
+                    db.close()
+
+            # Store reference to handler for future updates
+            self._handler = handler
+            
+            self.log_message(f"📋 Now monitoring channels: {monitored_channels}", "info")
+            
+        except Exception as e:
+            self.log_message(f"❌ Error updating monitored channels: {str(e)}", "error")
+            raise

@@ -82,7 +82,10 @@ def health_check():
 @app.post("/config/channel/")
 async def add_channel(channel: schemas.ChannelCreate, db: Session = Depends(get_db)):
     try:
-        return crud.create_or_update_channel(db, channel)
+        result = crud.create_or_update_channel(db, channel)
+        if telegram_listener and telegram_listener.is_running:
+            await telegram_listener.update_monitored_channels()
+        return result
     except Exception as e:
         logging.error(f"Error adding channel: {e}")
         raise HTTPException(
@@ -93,8 +96,10 @@ async def add_channel(channel: schemas.ChannelCreate, db: Session = Depends(get_
 
 # Endpoint to delete a Telegram channel
 @app.delete("/config/channel/{channel_id}")
-def delete_channel(channel_id: int, db: Session = Depends(get_db)):
+async def delete_channel(channel_id: int, db: Session = Depends(get_db)):
     crud.delete_channel(db, channel_id)
+    if telegram_listener and telegram_listener.is_running:
+        await telegram_listener.update_monitored_channels()
     return {"message": "Channel deleted successfully."}
 
 
