@@ -13,12 +13,16 @@ import models
 import schemas
 from database import SessionLocal, engine
 from telegram_listener import TelegramListener
+from logging_config import setup_logging
 
 load_dotenv()
 
 # Initialize FastAPI and create database tables
 app = FastAPI(title="Telegram Token Tracker")
 models.Base.metadata.create_all(bind=engine)
+
+# Setup logging
+logger = setup_logging()
 
 # Store telegram_listener instance globally
 telegram_listener = None

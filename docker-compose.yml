@@ -12,6 +12,7 @@ services:
     volumes:
       - telegram_session:/app/data/telegram_session
       - db_data:/app/data/db
+      - ./logs:/app/logs
     stdin_open: true
     tty: true
     restart: unless-stopped
