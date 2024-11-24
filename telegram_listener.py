@@ -187,7 +187,6 @@ class TelegramListener:
                 for channel in channels:
                     try:
                         entity = await self.client.get_entity(channel.name)
-                        self.log_message("INFO", f"Entity: {entity}")
                         channel_id = entity.id
                         self.log_message("INFO", f"Channel {channel.name} has ID: {channel_id}")
                         
