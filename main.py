@@ -101,9 +101,12 @@ async def add_channel(channel: schemas.ChannelCreate, db: Session = Depends(get_
 # Endpoint to delete a Telegram channel
 @app.delete("/config/channel/{channel_id}")
 async def delete_channel(channel_id: int, db: Session = Depends(get_db)):
-    crud.delete_channel(db, channel_id)
-    if telegram_listener and telegram_listener.is_running:
-        await telegram_listener.update_monitored_channels()
+    channel = crud.get_channel_by_id(db, channel_id)
+    if channel:
+        channel_name = channel.name
+        crud.delete_channel(db, channel_id)
+        if telegram_listener and telegram_listener.is_running:
+            await telegram_listener.remove_channel_handler(channel_name)
     return {"message": "Channel deleted successfully."}
 
 

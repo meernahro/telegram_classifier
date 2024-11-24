@@ -20,7 +20,7 @@ from termcolor import colored
 
 import crud
 import models
-from database import SessionLocal
+from database import get_db_session
 from openai_client import OpenAIClient
 from schemas import TokenCreate
 from utils import is_message_related_to_exchanges
@@ -39,6 +39,7 @@ class TelegramListener:
         self.client = None
         self.openai_client = OpenAIClient(os.getenv("OPENAI_API_KEY"))
         self.is_running = False
+        self.channel_handlers = {}  # Store handlers for each channel
 
     def log_message(self, level: str, message: str):
         """Log a message with color and to file"""
@@ -95,26 +96,33 @@ class TelegramListener:
     async def start(self):
         """Start the Telegram listener"""
         if self.is_running:
+            self.log_message("WARNING", "🚫 Telegram listener is already running")
             return
 
         try:
             if not self.client:
+                self.log_message("INFO", "🔄 Creating new Telegram client...")
                 self.client = TelegramClient(
                     self.session_name, self.api_id, self.api_hash
                 )
 
+            self.log_message("INFO", "🔌 Connecting to Telegram...")
             await self.client.connect()
+            
             if not await self.handle_authentication():
                 raise Exception("Authentication failed")
 
+            self.log_message("INFO", "🔄 Updating monitored channels...")
             await self.update_monitored_channels()
+            
             self.is_running = True
-
             self.log_message("INFO", "🚀 Telegram listener started successfully")
+            
             await self.client.run_until_disconnected()
 
         except Exception as e:
             self.log_message("ERROR", f"❌ Error in Telegram listener: {str(e)}")
+            self.log_message("ERROR", f"❌ Traceback: {traceback.format_exc()}")
             self.is_running = False
             raise
 
@@ -125,7 +133,7 @@ class TelegramListener:
             self.is_running = False
             self.log_message("INFO", "Telegram listener stopped")
 
-    async def process_message(self, event, db: SessionLocal):
+    async def process_message(self, event):
         """Process incoming messages"""
         try:
             message = event.message.message
@@ -134,32 +142,34 @@ class TelegramListener:
 
             self.log_message("INFO", f"Message content preview: {message[:100]}")
 
-            # Check for exchange names
-            if not is_message_related_to_exchanges(message):
-                return
+            # Use context manager for database session
+            with get_db_session() as db:
+                # Check for exchange names
+                if not is_message_related_to_exchanges(db, message):
+                    return
 
-            # Process with OpenAI
-            self.log_message("INFO", "🤖 Processing with OpenAI...")
-            tokens = self.openai_client.classify_message(message)
+                # Process with OpenAI
+                self.log_message("INFO", "🤖 Processing with OpenAI...")
+                tokens = self.openai_client.classify_message(message)
 
-            # Log OpenAI's response
-            self.log_message("INFO", f"🤖 OpenAI Response: {tokens}")
+                # Log OpenAI's response
+                self.log_message("INFO", f"🤖 OpenAI Response: {tokens}")
 
-            if tokens:
-                self.log_message("INFO", f"✅ Found token listing(s)! {tokens}")
+                if tokens:
+                    self.log_message("INFO", f"✅ Found token listing(s)! {tokens}")
 
-                # Save tokens
-                for token_data in tokens:
-                    token_create = TokenCreate(
-                        token=token_data["token"],
-                        exchange=token_data["exchange"],
-                        market=token_data["market"],
-                        timestamp=datetime.utcnow(),
-                    )
-                    saved_token = crud.create_token(db, token_create)
-                    self.log_message("INFO", f"💾 Saved token: {token_data['token']}")
-            else:
-                self.log_message("WARNING", "❌ No tokens found in OpenAI response")
+                    # Save tokens
+                    for token_data in tokens:
+                        token_create = TokenCreate(
+                            token=token_data["token"],
+                            exchange=token_data["exchange"],
+                            market=token_data["market"],
+                            timestamp=datetime.utcnow(),
+                        )
+                        saved_token = crud.create_token(db, token_create)
+                        self.log_message("INFO", f"💾 Saved token: {token_data['token']}")
+                else:
+                    self.log_message("WARNING", "❌ No tokens found in OpenAI response")
 
         except Exception as e:
             self.log_message("ERROR", f"❌ Error processing message: {str(e)}")
@@ -170,49 +180,40 @@ class TelegramListener:
     async def update_monitored_channels(self):
         """Update the list of monitored channels"""
         try:
-            # Get monitored channel usernames from database
-            db = SessionLocal()
-            channels = crud.get_all_channels(db)
-            
-            # Get all dialogs (conversations) from Telegram
-            dialogs = await self.client.get_dialogs()
-            
-            # Create a mapping of lowercase channel names to their actual names
-            channel_map = {dialog.entity.username.lower(): dialog.entity.username 
-                          for dialog in dialogs 
-                          if hasattr(dialog.entity, 'username') and dialog.entity.username}
-            
-            # Match database channel names with actual Telegram channel names
-            monitored_channels = []
-            for ch in channels:
-                if ch.name.lower() in channel_map:
-                    monitored_channels.append(channel_map[ch.name.lower()])
-            
-            db.close()
+            with get_db_session() as db:
+                channels = crud.get_all_channels(db)
+                
+                # Get channel entities and their IDs
+                for channel in channels:
+                    try:
+                        entity = await self.client.get_entity(channel.name)
+                        self.log_message("INFO", f"Entity: {entity}")
+                        channel_id = entity.id
+                        self.log_message("INFO", f"Channel {channel.name} has ID: {channel_id}")
+                        
+                        # Remove old handler if exists
+                        if channel.name in self.channel_handlers:
+                            self.client.remove_event_handler(self.channel_handlers[channel.name])
+                            del self.channel_handlers[channel.name]
+                        
+                        # Create new handler for this channel
+                        @self.client.on(events.NewMessage(chats=[channel_id]))
+                        async def handler(event):
+                            await self.process_message(event)
+                        
+                        # Store handler reference
+                        self.channel_handlers[channel.name] = handler
+                        
+                    except Exception as e:
+                        self.log_message("ERROR", f"Failed to get entity for channel {channel.name}: {str(e)}")
 
-            # Remove existing handler if it exists
-            if hasattr(self, '_handler'):
-                self.client.remove_event_handler(self._handler)
-
-            # Set up new handler with updated channels
-            @self.client.on(events.NewMessage(chats=monitored_channels))
-            async def handler(event):
-                db = SessionLocal()
-                try:
-                    chat = await event.get_chat()
-                    username = chat.username if hasattr(chat, "username") else None
-
-                    if username:  # Only process if we can get the username
-                        self.log_message("INFO", f"📨 New message from @{username}")
-                        await self.process_message(event, db)
-                finally:
-                    db.close()
-
-            # Store reference to handler for future updates
-            self._handler = handler
-            
-            self.log_message("INFO", f"📋 Now monitoring channels: {monitored_channels}")
-            
         except Exception as e:
-            self.log_message("ERROR", f"❌ Error updating monitored channels: {str(e)}")
+            self.log_message("ERROR", f"Error updating monitored channels: {str(e)}")
             raise
+
+    async def remove_channel_handler(self, channel_name: str):
+        """Remove event handler for a specific channel"""
+        if channel_name in self.channel_handlers:
+            self.client.remove_event_handler(self.channel_handlers[channel_name])
+            del self.channel_handlers[channel_name]
+            self.log_message("INFO", f"Removed handler for channel: {channel_name}")
