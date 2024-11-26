@@ -14,6 +14,7 @@ import schemas
 from database import SessionLocal, engine
 from telegram_listener import TelegramListener
 from logging_config import setup_logging
+from websocket_server import WebSocketServer
 
 load_dotenv()
 
@@ -27,6 +28,9 @@ logger = setup_logging()
 # Store telegram_listener instance globally
 telegram_listener = None
 
+# Initialize WebSocket server
+websocket_server = None
+
 
 # Dependency to get the database session
 def get_db():
@@ -39,27 +43,35 @@ def get_db():
 
 @app.on_event("startup")
 async def startup_event():
-    """Start the Telegram listener when the FastAPI app starts"""
-    global telegram_listener
+    """Start the Telegram listener and WebSocket server when the FastAPI app starts"""
+    global telegram_listener, websocket_server
     try:
-        telegram_listener = TelegramListener()
+        # Initialize and start WebSocket server
+        websocket_server = WebSocketServer()
+        await websocket_server.start()
+        
+        # Initialize Telegram listener with WebSocket server
+        telegram_listener = TelegramListener(websocket_server=websocket_server)
         # Create a background task for the Telegram listener
         asyncio.create_task(telegram_listener.start())
         logging.info("Telegram listener started in background")
     except Exception as e:
-        logging.error(f"Failed to start Telegram listener: {e}")
+        logging.error(f"Failed to start services: {e}")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Stop the Telegram listener when the FastAPI app stops"""
-    global telegram_listener
+    """Stop the Telegram listener and WebSocket server when the FastAPI app stops"""
+    global telegram_listener, websocket_server
     try:
         if telegram_listener:
             await telegram_listener.stop()
             logging.info("Telegram listener stopped")
+        if websocket_server:
+            await websocket_server.stop()
+            logging.info("WebSocket server stopped")
     except Exception as e:
-        logging.error(f"Failed to stop Telegram listener: {e}")
+        logging.error(f"Failed to stop services: {e}")
 
 
 # Error handling middleware

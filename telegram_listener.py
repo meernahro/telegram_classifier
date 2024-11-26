@@ -31,7 +31,7 @@ load_dotenv()
 
 
 class TelegramListener:
-    def __init__(self):
+    def __init__(self, websocket_server=None):
         self.logger = logger or setup_logging()
         self.api_id = os.getenv("TELEGRAM_API_ID")
         self.api_hash = os.getenv("TELEGRAM_API_HASH")
@@ -40,6 +40,7 @@ class TelegramListener:
         self.openai_client = OpenAIClient(os.getenv("OPENAI_API_KEY"))
         self.is_running = False
         self.channel_handlers = {}  # Store handlers for each channel
+        self.websocket_server = websocket_server
 
     def log_message(self, level: str, message: str):
         """Log a message with color and to file"""
@@ -154,6 +155,13 @@ class TelegramListener:
 
                 # Log OpenAI's response
                 self.log_message("INFO", f"🤖 OpenAI Response: {tokens}")
+
+                # Broadcast tokens via WebSocket if available
+                if self.websocket_server and tokens:
+                    await self.websocket_server.broadcast({
+                        "type": "tokens",
+                        "data": tokens
+                    })
 
                 if tokens:
                     self.log_message("INFO", f"✅ Found token listing(s)! {tokens}")
