@@ -3,9 +3,6 @@ version: '3.8'
 services:
   app:
     build: .
-    ports:
-      - "127.0.0.1:8082:8082"
-      - "127.0.0.1:8765:8765"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - TELEGRAM_API_ID=${TELEGRAM_API_ID}
@@ -17,9 +14,15 @@ services:
     stdin_open: true
     tty: true
     restart: unless-stopped
+    networks:
+      - shared_network
 
 volumes:
   telegram_session:
     name: telegram_classifier_session
   db_data:
     name: telegram_classifier_db
+
+networks:
+  shared_network:
+    external: true

@@ -13,8 +13,6 @@ COPY . .
 # Create directories for persistent data
 RUN mkdir -p /app/data/telegram_session /app/data/db
 
-# Expose port 8082
-EXPOSE 8082
 
 # Run in interactive mode
 ENV PYTHONUNBUFFERED=1
