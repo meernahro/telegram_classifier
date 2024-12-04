@@ -15,7 +15,7 @@ class OpenAIClient:
                 messages=[
                     {
                         "role": "system",
-                        "content": 'you are a classifier function. You will receive a message that might contain which token or tokens is listed or going to be listed or launched on spot or future perpetuals on which exchange on spot or future. the message might not even talk about token listing so don\'t give false positives. or job is to identify name of the token or tokens (without usdt). return only JSON in ARRAY , NO TALKING. if the message doesn\'t talk about a token being listed, return []. if 1 token, return for example [{"token": "ABCD","exchange": "binance","market": "future"}] . if two or more tokens, put them in the array.',
+                        "content": 'you are a classifier function. You will receive a message that might contain which token or tokens is listed or going to be listed or launched on spot or future perpetuals on which exchange on spot or future. the message might not even talk about token listing so don\'t give false positives. or job is to identify name of the token or tokens (without USDT) make sure you remove USDT. return only JSON in ARRAY , NO TALKING. if the message doesn\'t talk about a token being listed, return []. if 1 token, return for example [{"token": "ABCD","exchange": "binance","market": "future"}] . if two or more tokens, put them in the array.',
                     },
                     {"role": "user", "content": message},
                 ],
