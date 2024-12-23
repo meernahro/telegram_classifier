@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY . .
 
 # Create directories for persistent data
-RUN mkdir -p /app/data/telegram_session /app/data/db
+# RUN mkdir -p /app/data/telegram_session /app/data/db
 
 
 # Run in interactive mode

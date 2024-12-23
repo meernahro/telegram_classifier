@@ -1,0 +1,1 @@
+docker run --rm -v "telegram_classifier_session:/data" -v "${PWD}/telegram_session:/src/telegram_session" alpine sh -c "cp -r /src/telegram_session/* /data/"

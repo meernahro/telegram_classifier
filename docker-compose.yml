@@ -19,6 +19,7 @@ services:
 
 volumes:
   telegram_session:
+    external: true
     name: telegram_classifier_session
   db_data:
     name: telegram_classifier_db
